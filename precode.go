@@ -12,10 +12,9 @@ import (
 // отправляет их в канал ch. При этом после записи в канал для каждого числа
 // вызывается функция fn. Она служит для подсчёта количества и суммыb
 func Generator(ctx context.Context, ch chan<- int64, fn func(int64)) {
-
+	defer close(ch)
 	var i int64 = 1
 	for {
-		defer close(ch)
 		select {
 		case <-ctx.Done():
 			return
@@ -29,11 +28,7 @@ func Generator(ctx context.Context, ch chan<- int64, fn func(int64)) {
 // Worker читает число из канала in и пишет его в канал out.
 func Worker(in <-chan int64, out chan<- int64) {
 	defer close(out)
-	for {
-		v, ok := <-in
-		if !ok {
-			break
-		}
+	for v := range in {
 		out <- v
 		time.Sleep(1 * time.Millisecond)
 	}
@@ -41,14 +36,14 @@ func Worker(in <-chan int64, out chan<- int64) {
 
 func main() {
 	chIn := make(chan int64)
-
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
+
 	var inputSum int64   // сумма сгенерированных чисел
 	var inputCount int64 // количество сгенерированных чисел
+	var mu sync.Mutex
 
 	go Generator(ctx, chIn, func(i int64) {
-		var mu sync.Mutex
 		mu.Lock()
 		defer mu.Unlock()
 		inputSum += i
@@ -86,11 +81,7 @@ func main() {
 	var count int64 // количество чисел результирующего канала
 	var sum int64   // сумма чисел результирующего канала
 
-	for {
-		v, ok := <-chOut
-		if !ok {
-			break
-		}
+	for v := range chOut {
 		count++
 		sum += v
 	}
